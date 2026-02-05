@@ -1,0 +1,481 @@
+diff --git a/src/CoolApp.Api/CoolApp.Api.csproj b/src/CoolApp.Api/CoolApp.Api.csproj
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/src/CoolApp.Api/CoolApp.Api.csproj
+@@ -0,0 +1,16 @@
++<Project Sdk="Microsoft.NET.Sdk.Web">
++  <PropertyGroup>
++    <TargetFramework>net8.0</TargetFramework>
++    <Nullable>enable</Nullable>
++    <ImplicitUsings>enable</ImplicitUsings>
++  </PropertyGroup>
++  <ItemGroup>
++    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.0" />
++    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.0">
++      <PrivateAssets>all</PrivateAssets>
++    </PackageReference>
++    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.0" />
++  </ItemGroup>
++</Project>
+diff --git a/src/CoolApp.Api/Models/User.cs b/src/CoolApp.Api/Models/User.cs
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/src/CoolApp.Api/Models/User.cs
+@@ -0,0 +1,24 @@
++using System;
++
++namespace CoolApp.Api.Models
++{
++    public class User
++    {
++        public int Id { get; set; }
++        public string Email { get; set; } = null!;
++        public byte[] PasswordHash { get; set; } = null!;
++        public byte[] PasswordSalt { get; set; } = null!;
++        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
++    }
++}
++
+diff --git a/src/CoolApp.Api/Models/UserDto.cs b/src/CoolApp.Api/Models/UserDto.cs
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/src/CoolApp.Api/Models/UserDto.cs
+@@ -0,0 +1,16 @@
++namespace CoolApp.Api.Models
++{
++    public class UserDto
++    {
++        public string Email { get; set; } = null!;
++        public string Password { get; set; } = null!;
++    }
++}
++
+diff --git a/src/CoolApp.Api/Data/AppDbContext.cs b/src/CoolApp.Api/Data/AppDbContext.cs
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/src/CoolApp.Api/Data/AppDbContext.cs
+@@ -0,0 +1,28 @@
++using Microsoft.EntityFrameworkCore;
++using CoolApp.Api.Models;
++
++namespace CoolApp.Api.Data
++{
++    public class AppDbContext : DbContext
++    {
++        public DbSet<User> Users => Set<User>();
++
++        public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
++
++        protected override void OnModelCreating(ModelBuilder modelBuilder)
++        {
++            modelBuilder.Entity<User>().HasIndex(u => u.Email).IsUnique();
++            base.OnModelCreating(modelBuilder);
++        }
++    }
++}
++
+diff --git a/src/CoolApp.Api/DTOs/RegisterDto.cs b/src/CoolApp.Api/DTOs/RegisterDto.cs
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/src/CoolApp.Api/DTOs/RegisterDto.cs
+@@ -0,0 +1,3 @@
++namespace CoolApp.Api.DTOs
++{
++    public record RegisterDto(string Email, string Password);
++}
+diff --git a/src/CoolApp.Api/DTOs/LoginDto.cs b/src/CoolApp.Api/DTOs/LoginDto.cs
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/src/CoolApp.Api/DTOs/LoginDto.cs
+@@ -0,0 +1,3 @@
++namespace CoolApp.Api.DTOs
++{
++    public record LoginDto(string Email, string Password);
++}
+diff --git a/src/CoolApp.Api/Services/ITokenService.cs b/src/CoolApp.Api/Services/ITokenService.cs
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/src/CoolApp.Api/Services/ITokenService.cs
+@@ -0,0 +1,9 @@
++using CoolApp.Api.Models;
++
++namespace CoolApp.Api.Services
++{
++    public interface ITokenService
++    {
++        string CreateToken(User user);
++    }
++}
+diff --git a/src/CoolApp.Api/Services/TokenService.cs b/src/CoolApp.Api/Services/TokenService.cs
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/src/CoolApp.Api/Services/TokenService.cs
+@@ -0,0 +1,41 @@
++using System.IdentityModel.Tokens.Jwt;
++using System.Security.Claims;
++using System.Text;
++using Microsoft.Extensions.Configuration;
++using Microsoft.IdentityModel.Tokens;
++using CoolApp.Api.Models;
++
++namespace CoolApp.Api.Services
++{
++    public class TokenService : ITokenService
++    {
++        private readonly string _jwtSecret;
++        public TokenService(IConfiguration config)
++        {
++            _jwtSecret = config["Jwt:Key"] ?? throw new InvalidOperationException("JWT secret missing");
++        }
++
++        public string CreateToken(User user)
++        {
++            var claims = new[]
++            {
++                new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
++                new Claim(JwtRegisteredClaimNames.Email, user.Email)
++            };
++
++            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSecret));
++            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
++
++            var token = new JwtSecurityToken(
++                issuer: null,
++                audience: null,
++                claims: claims,
++                expires: DateTime.UtcNow.AddDays(7),
++                signingCredentials: creds);
++
++            return new JwtSecurityTokenHandler().WriteToken(token);
++        }
++    }
++}
+diff --git a/src/CoolApp.Api/Program.cs b/src/CoolApp.Api/Program.cs
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/src/CoolApp.Api/Program.cs
+@@ -0,0 +1,214 @@
++using Microsoft.EntityFrameworkCore;
++using Microsoft.AspNetCore.Authentication.JwtBearer;
++using Microsoft.IdentityModel.Tokens;
++using System.Text;
++using CoolApp.Api.Data;
++using CoolApp.Api.Models;
++using CoolApp.Api.DTOs;
++using CoolApp.Api.Services;
++using System.Security.Cryptography;
++
++var builder = WebApplication.CreateBuilder(args);
++
++// Configure DB (SQLite file in working dir)
++builder.Services.AddDbContext<AppDbContext>(opt =>
++    opt.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection") ?? "Data Source=coolapp_api.db"));
++
++// Token service
++builder.Services.AddSingleton<ITokenService, TokenService>();
++
++// JWT auth
++var jwtKey = builder.Configuration["Jwt:Key"] ?? "development-secret-change-me";
++builder.Services
++    .AddAuthentication(options =>
++    {
++        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
++        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
++    })
++    .AddJwtBearer(options =>
++    {
++        options.RequireHttpsMetadata = false;
++        options.SaveToken = true;
++        options.TokenValidationParameters = new TokenValidationParameters
++        {
++            ValidateIssuer = false,
++            ValidateAudience = false,
++            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
++            ValidateIssuerSigningKey = true
++        };
++    });
++
++builder.Services.AddAuthorization();
++builder.Services.AddEndpointsApiExplorer();
++builder.Services.AddSwaggerGen();
++
++var app = builder.Build();
++app.UseSwagger();
++app.UseSwaggerUI();
++
++app.UseAuthentication();
++app.UseAuthorization();
++
++using (var scope = app.Services.CreateScope())
++{
++    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
++    db.Database.EnsureCreated();
++}
++
++// Helpers for password hashing
++static void CreatePasswordHash(string password, out byte[] hash, out byte[] salt)
++{
++    using var rng = RandomNumberGenerator.Create();
++    salt = new byte[16];
++    rng.GetBytes(salt);
++    using var pbkdf2 = new Rfc2898DeriveBytes(password, salt, 100_000, System.Security.Cryptography.HashAlgorithmName.SHA256);
++    hash = pbkdf2.GetBytes(32);
++}
++
++static bool VerifyPasswordHash(string password, byte[] storedHash, byte[] storedSalt)
++{
++    using var pbkdf2 = new Rfc2898DeriveBytes(password, storedSalt, 100_000, System.Security.Cryptography.HashAlgorithmName.SHA256);
++    var computed = pbkdf2.GetBytes(32);
++    return CryptographicOperations.FixedTimeEquals(computed, storedHash);
++}
++
++// Endpoints
++app.MapPost("/api/auth/register", async (RegisterDto dto, AppDbContext db, ITokenService tokens) =>
++{
++    var email = dto.Email.Trim().ToLowerInvariant();
++    if (await db.Users.AnyAsync(u => u.Email == email))
++        return Results.BadRequest(new { error = "Пользователь с таким email уже существует." });
++
++    CreatePasswordHash(dto.Password, out var hash, out var salt);
++
++    var user = new User { Email = email, PasswordHash = hash, PasswordSalt = salt, CreatedAt = DateTime.UtcNow };
++    db.Users.Add(user);
++    await db.SaveChangesAsync();
++
++    var token = tokens.CreateToken(user);
++    return Results.Ok(new { token });
++});
++
++app.MapPost("/api/auth/login", async (LoginDto dto, AppDbContext db, ITokenService tokens) =>
++{
++    var email = dto.Email.Trim().ToLowerInvariant();
++    var user = await db.Users.SingleOrDefaultAsync(u => u.Email == email);
++    if (user == null) return Results.BadRequest(new { error = "Пользователь не найден." });
++
++    if (!VerifyPasswordHash(dto.Password, user.PasswordHash, user.PasswordSalt))
++        return Results.BadRequest(new { error = "Неверный пароль." });
++
++    var token = tokens.CreateToken(user);
++    return Results.Ok(new { token });
++});
++
++app.Run();
+diff --git a/src/CoolApp.Api/appsettings.Development.json b/src/CoolApp.Api/appsettings.Development.json
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/src/CoolApp.Api/appsettings.Development.json
+@@ -0,0 +1,8 @@
++{
++  "Jwt": {
++    "Key": "development-secret-change-me"
++  },
++  "ConnectionStrings": {
++    "DefaultConnection": "Data Source=coolapp_api_dev.db"
++  }
++}
+diff --git a/src/CoolApp/Services/ApiAuthService.cs b/src/CoolApp/Services/ApiAuthService.cs
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/src/CoolApp/Services/ApiAuthService.cs
+@@ -0,0 +1,84 @@
++using System.Net.Http.Json;
++using Microsoft.Maui.Storage;
++
++namespace CoolApp.Services
++{
++    public interface IApiAuthService
++    {
++        Task<(bool Success, string? Error)> RegisterAsync(string email, string password);
++        Task<(bool Success, string? Error)> LoginAsync(string email, string password);
++        Task<string?> GetTokenAsync();
++        Task LogoutAsync();
++    }
++
++    public class ApiAuthService : IApiAuthService
++    {
++        private readonly HttpClient _client;
++        private const string TokenKey = "coolapp_jwt";
++
++        public ApiAuthService(HttpClient client)
++        {
++            _client = client;
++        }
++
++        public async Task<(bool Success, string? Error)> RegisterAsync(string email, string password)
++        {
++            var res = await _client.PostAsJsonAsync("/api/auth/register", new { email, password });
++            if (!res.IsSuccessStatusCode)
++            {
++                var err = await res.Content.ReadFromJsonAsync<Dictionary<string, string?>>();
++                return (false, err?["error"] ?? "Ошибка регистрации");
++            }
++
++            var payload = await res.Content.ReadFromJsonAsync<Dictionary<string, string?>>();
++            if (payload != null && payload.TryGetValue("token", out var token) && token != null)
++            {
++                await SecureStorage.Default.SetAsync(TokenKey, token);
++                return (true, null);
++            }
++            return (false, "Токен не получен");
++        }
++
++        public async Task<(bool Success, string? Error)> LoginAsync(string email, string password)
++        {
++            var res = await _client.PostAsJsonAsync("/api/auth/login", new { email, password });
++            if (!res.IsSuccessStatusCode)
++            {
++                var err = await res.Content.ReadFromJsonAsync<Dictionary<string, string?>>();
++                return (false, err?["error"] ?? "Ошибка входа");
++            }
++            var payload = await res.Content.ReadFromJsonAsync<Dictionary<string, string?>>();
++            if (payload != null && payload.TryGetValue("token", out var token) && token != null)
++            {
++                await SecureStorage.Default.SetAsync(TokenKey, token);
++                return (true, null);
++            }
++            return (false, "Токен не получен");
++        }
++
++        public Task<string?> GetTokenAsync() => SecureStorage.Default.GetAsync(TokenKey);
++
++        public Task LogoutAsync() => SecureStorage.Default.RemoveAsync(TokenKey);
++    }
++}
+diff --git a/src/CoolApp/ViewModels/AuthViewModel.cs b/src/CoolApp/ViewModels/AuthViewModel.cs
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/src/CoolApp/ViewModels/AuthViewModel.cs
+@@ -0,0 +1,69 @@
++using CommunityToolkit.Mvvm.ComponentModel;
++using CommunityToolkit.Mvvm.Input;
++using CoolApp.Services;
++
++namespace CoolApp.ViewModels
++{
++    public partial class AuthViewModel : ObservableObject
++    {
++        private readonly IApiAuthService _auth;
++
++        public AuthViewModel(IApiAuthService auth)
++        {
++            _auth = auth;
++        }
++
++        [ObservableProperty] string email = string.Empty;
++        [ObservableProperty] string password = string.Empty;
++        [ObservableProperty] string message = string.Empty;
++
++        [ICommand]
++        public async Task RegisterAsync()
++        {
++            Message = string.Empty;
++            var (ok, err) = await _auth.RegisterAsync(Email, Password);
++            Message = ok ? "Успешная регистрация" : (err ?? "Ошибка");
++        }
++
++        [ICommand]
++        public async Task LoginAsync()
++        {
++            Message = string.Empty;
++            var (ok, err) = await _auth.LoginAsync(Email, Password);
++            Message = ok ? "Вход выполнен" : (err ?? "Ошибка");
++        }
++    }
++}
+diff --git a/src/CoolApp/Pages/LoginPage.xaml b/src/CoolApp/Pages/LoginPage.xaml
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/src/CoolApp/Pages/LoginPage.xaml
+@@ -0,0 +1,22 @@
++<?xml version="1.0" encoding="utf-8" ?>
++<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
++             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
++             xmlns:vm="clr-namespace:CoolApp.ViewModels"
++             x:Class="CoolApp.Pages.LoginPage"
++             Title="Login">
++    <ContentPage.BindingContext>
++        <vm:AuthViewModel />
++    </ContentPage.BindingContext>
++
++    <VerticalStackLayout Padding="20" Spacing="12">
++        <Entry Placeholder="Email" Text="{Binding Email}" Keyboard="Email"/>
++        <Entry Placeholder="Password" IsPassword="True" Text="{Binding Password}"/>
++        <Button Text="Войти" Command="{Binding LoginAsync}" />
++        <Button Text="Регистрация" Command="{Binding RegisterAsync}" />
++        <Label Text="{Binding Message}" TextColor="Red"/>
++    </VerticalStackLayout>
++</ContentPage>
+diff --git a/src/CoolApp/MauiProgram.cs b/src/CoolApp/MauiProgram.cs
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/src/CoolApp/MauiProgram.cs
+@@ -0,0 +1,66 @@
++using Microsoft.Extensions.DependencyInjection;
++using CoolApp.Services;
++using CoolApp.ViewModels;
++using System;
++
++namespace CoolApp
++{
++    public static class MauiProgram
++    {
++        public static MauiApp CreateMauiApp()
++        {
++            var builder = MauiApp.CreateBuilder();
++            builder
++                .UseMauiApp<App>()
++                .ConfigureFonts(fonts => fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular"));
++
++            // Configure API base address (change for production)
++            var apiBase = "http://10.0.2.2:5000"; // emulator -> host; for simulator/desktop use http://localhost:5000 or actual IP
++            builder.Services.AddHttpClient("api", client =>
++            {
++                client.BaseAddress = new Uri(apiBase);
++            });
++
++            builder.Services.AddSingleton<IApiAuthService>(sp =>
++            {
++                var clientFactory = sp.GetRequiredService<IHttpClientFactory>();
++                var client = clientFactory.CreateClient("api");
++                return new ApiAuthService(client);
++            });
++
++            builder.Services.AddTransient<AuthViewModel>();
++            builder.Services.AddTransient<Pages.LoginPage>();
++
++            return builder.Build();
++        }
++    }
++}
+diff --git a/SECURITY.md b/SECURITY.md
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/SECURITY.md
+@@ -0,0 +1,18 @@
++# Security notes
++
++- Do NOT commit secrets (JWT secret, keystores, certificates) to the repository.
++- Use GitHub Secrets / Azure Key Vault / other secret store for production secrets:
++  - COOLAPP_API_JWT_SECRET
++  - ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
++- For local development, use appsettings.Development.json and local keystores (not checked in).
++
++Additional recommendations:
++- Use HTTPS for backend in production and enforce ValidateIssuer/Audience in JWT options.
++- Consider refresh tokens and token revocation in production systems.
++- Store long-lived secrets in a dedicated secret store (KeyVault, AWS Secrets Manager, etc.).
