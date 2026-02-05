@@ -1,0 +1,21 @@
+<PROJECT_CONTENT>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net8.0-android;net8.0-ios;net8.0-maccatalyst;net8.0-windows10.0.19041.0</TargetFrameworks>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+    <UseMaui>true</UseMaui>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationTitle>MyMauiApp</ApplicationTitle>
+    <RootNamespace>MyMauiApp</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <MauiAsset Include="Resources\Fonts\**\*" />
+    <MauiAsset Include="Resources\Images\**\*" />
+    <MauiXaml Update="App.xaml" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Maui" Version="5.0.0" />
+  </ItemGroup>
+</Project>
+</PROJECT_CONTENT>
